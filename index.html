@@ -656,9 +656,30 @@
   </div>
 </div>
 
-<script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
+  import {
+    getFirestore, collection, doc, setDoc, updateDoc, deleteDoc,
+    onSnapshot, writeBatch
+  } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyApCI97wI2aeXQ_bjPvt96i4-JCh9gNvpg",
+    authDomain: "solid-trial-payment.firebaseapp.com",
+    projectId: "solid-trial-payment",
+    storageBucket: "solid-trial-payment.firebasestorage.app",
+    messagingSenderId: "60962779182",
+    appId: "1:60962779182:web:66de0ffa4a6d77b60c6fbf"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const trialsRef = collection(db, 'trialLessons');
+  const paymentsRef = collection(db, 'payments');
+
   const TRIAL_KEY = 'trialLessonManager.trials.v1';
   const PAYMENT_KEY = 'trialLessonManager.payments.v1';
+  const MIGRATION_KEY = 'trialLessonManager.firebaseMigration.v1';
   const ticketPrices = { 1: 60000, 4: 240000, 10: 600000 };
   const statusInfo = {
     scheduled: { label: '체험 예정', badge: '' },
@@ -666,6 +687,9 @@
     waiting: { label: '대기', badge: 'waiting' },
     failed: { label: '실패', badge: 'failed' }
   };
+
+  let trialsCache = [];
+  let paymentsCache = [];
   let activeTrialStatus = 'scheduled';
   let activePaymentStatus = 'pending';
   let pendingReasonChange = null;
@@ -678,13 +702,9 @@
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
 
-  function load(key) {
+  function legacyLoad(key) {
     try { return JSON.parse(localStorage.getItem(key)) || []; }
     catch { return []; }
-  }
-
-  function save(key, value) {
-    localStorage.setItem(key, JSON.stringify(value));
   }
 
   function money(value) {
@@ -703,7 +723,9 @@
   }
 
   function createdText(value) {
+    if (!value) return '-';
     const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return value;
     return new Intl.DateTimeFormat('ko-KR', {
       year: 'numeric', month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit'
@@ -712,10 +734,8 @@
 
   function escapeHtml(value = '') {
     return String(value)
-      .replaceAll('&', '&amp;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;')
-      .replaceAll('"', '&quot;')
+      .replaceAll('&', '&amp;').replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;').replaceAll('"', '&quot;')
       .replaceAll("'", '&#039;');
   }
 
@@ -724,7 +744,7 @@
     el.textContent = message;
     el.classList.add('show');
     clearTimeout(toast.timer);
-    toast.timer = setTimeout(() => el.classList.remove('show'), 1800);
+    toast.timer = setTimeout(() => el.classList.remove('show'), 2200);
   }
 
   function switchMain(main) {
@@ -749,10 +769,7 @@
   function clearTrialEditMode(shouldReset = true) {
     editingTrialId = null;
     setTrialEditMode(false);
-    if (shouldReset) {
-      $('#trialForm').reset();
-      refreshTrialDateMode();
-    }
+    if (shouldReset) { $('#trialForm').reset(); refreshTrialDateMode(); }
   }
 
   function setPaymentEditMode(isEdit) {
@@ -765,14 +782,8 @@
   function clearPaymentEditMode(shouldReset = true) {
     editingPaymentId = null;
     setPaymentEditMode(false);
-    if (shouldReset) {
-      $('#paymentForm').reset();
-      refreshPrice();
-    }
+    if (shouldReset) { $('#paymentForm').reset(); refreshPrice(); }
   }
-
-  $$('.main-tab').forEach(btn => btn.addEventListener('click', () => switchMain(btn.dataset.main)));
-  $$('.sub-tab').forEach(btn => btn.addEventListener('click', () => switchSub(btn.dataset.group, btn.dataset.target)));
 
   function paymentValues() {
     const type = $('#paymentType').value;
@@ -789,11 +800,9 @@
     $('#depositorField').classList.toggle('hidden', type !== '계좌이체');
     $('#depositorName').required = type === '계좌이체';
     if (type !== '계좌이체') $('#depositorName').value = '';
-
     $('#customPriceField').classList.toggle('hidden', !isCustom);
     $('#customBasePrice').required = isCustom;
     if (!isCustom) $('#customBasePrice').value = '';
-
     $('#basePrice').textContent = base > 0 ? money(base) : '직접 입력';
     $('#vatPrice').textContent = base > 0 ? (vat ? money(vat) : '없음') : '-';
     $('#totalPrice').textContent = base > 0 ? money(total) : '-';
@@ -806,247 +815,25 @@
     if (undecided) $('#trialDateTime').value = '';
   }
 
-  $('#trialScheduleType').addEventListener('change', refreshTrialDateMode);
-
-  $('#paymentType').addEventListener('change', refreshPrice);
-  $('#ticketType').addEventListener('change', refreshPrice);
-  $('#customBasePrice').addEventListener('input', refreshPrice);
-
-  $('#trialForm').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const trials = load(TRIAL_KEY).map(normalizeTrial);
-    const scheduleType = $('#trialScheduleType').value;
-    const trialPayload = {
-      name: $('#trialName').value.trim(),
-      team: $('#trialTeam').value.trim(),
-      age: $('#trialAge').value,
-      position: $('#trialPosition').value.trim(),
-      trainer: $('#trialTrainer').value.trim(),
-      dateTime: scheduleType === 'undecided' ? '미정' : $('#trialDateTime').value,
-      note: $('#trialNote').value.trim()
-    };
-
-    if (editingTrialId) {
-      const updated = trials.map(item => item.id === editingTrialId ? {
-        ...item,
-        ...trialPayload
-      } : item);
-      save(TRIAL_KEY, updated);
-      clearTrialEditMode();
-      renderTrials();
-      switchSub('trial', 'trialList');
-      toast('체험 수업이 수정되었습니다.');
-      return;
-    }
-
-    trials.unshift({
-      id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
-      ...trialPayload,
-      status: 'scheduled',
-      statusReason: '',
-      statusChangedAt: '',
-      createdAt: new Date().toISOString()
-    });
-    save(TRIAL_KEY, trials);
-    e.target.reset();
-    refreshTrialDateMode();
-    renderTrials();
-    switchSub('trial', 'trialList');
-    toast('체험 수업이 저장되었습니다.');
-  });
-
-  $('#trialCancelEditBtn').addEventListener('click', () => {
-    clearTrialEditMode();
-    toast('수정이 취소되었습니다.');
-  });
-
-  function openTrialEditConfirm(id) {
-    pendingEditTrialId = id;
-    $('#trialEditConfirmModal').classList.remove('hidden');
-  }
-
-  function closeTrialEditConfirm() {
-    pendingEditTrialId = null;
-    $('#trialEditConfirmModal').classList.add('hidden');
-  }
-
-  function startEditTrial(id) {
-    const item = load(TRIAL_KEY).map(normalizeTrial).find(trial => trial.id === id);
-    if (!item) return;
-    editingTrialId = id;
-    setTrialEditMode(true);
-    $('#trialName').value = item.name || '';
-    $('#trialTeam').value = item.team || '';
-    $('#trialAge').value = item.age || '';
-    $('#trialPosition').value = item.position || '';
-    $('#trialTrainer').value = item.trainer || '';
-    $('#trialNote').value = item.note || '';
-    $('#trialScheduleType').value = item.dateTime === '미정' ? 'undecided' : 'fixed';
-    refreshTrialDateMode();
-    $('#trialDateTime').value = item.dateTime === '미정' ? '' : (item.dateTime || '');
-    switchMain('trial');
-    switchSub('trial', 'trialAdd');
-    setTimeout(() => {
-      $('#trialForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
-      $('#trialName').focus();
-    }, 60);
-  }
-
-  window.requestEditTrial = function(id) {
-    openTrialEditConfirm(id);
-  };
-
-  $('#trialEditConfirmCancel').addEventListener('click', closeTrialEditConfirm);
-  $('#trialEditConfirmModal').addEventListener('click', (e) => {
-    if (e.target === $('#trialEditConfirmModal')) closeTrialEditConfirm();
-  });
-  $('#trialEditConfirmSave').addEventListener('click', () => {
-    if (!pendingEditTrialId) return;
-    const id = pendingEditTrialId;
-    closeTrialEditConfirm();
-    startEditTrial(id);
-  });
-
-  $('#paymentForm').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const { type, count, isCustom, base, vat, total } = paymentValues();
-    const depositor = $('#depositorName').value.trim();
-    if (type === '계좌이체' && !depositor) {
-      toast('입금자명을 입력해 주세요.');
-      $('#depositorName').focus();
-      return;
-    }
-    if (isCustom && base <= 0) {
-      toast('기타 기본 금액을 입력해 주세요.');
-      $('#customBasePrice').focus();
-      return;
-    }
-
-    const payload = {
-      type,
-      player: $('#paymentPlayer').value.trim(),
-      affiliation: $('#paymentAffiliation').value.trim(),
-      depositor,
-      ticketCount: count,
-      ticketLabel: isCustom ? '기타' : `${count}회권`,
-      base,
-      vat,
-      total
-    };
-
-    const payments = load(PAYMENT_KEY).map(normalizePayment);
-    if (editingPaymentId) {
-      const updated = payments.map(item => item.id === editingPaymentId ? {
-        ...item,
-        ...payload
-      } : item);
-      save(PAYMENT_KEY, updated);
-      clearPaymentEditMode();
-      renderPayments();
-      switchSub('payment', 'paymentList');
-      toast('결제 내역이 수정되었습니다.');
-      return;
-    }
-
-    payments.unshift({
-      id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
-      ...payload,
-      refreshed: false,
-      refreshedBy: '',
-      refreshedAt: '',
-      createdAt: new Date().toISOString()
-    });
-    save(PAYMENT_KEY, payments);
-    e.target.reset();
-    refreshPrice();
-    renderPayments();
-    switchSub('payment', 'paymentList');
-    toast('결제 내역이 저장되었습니다.');
-  });
-
-  $('#paymentCancelEditBtn').addEventListener('click', () => {
-    clearPaymentEditMode();
-    toast('수정이 취소되었습니다.');
-  });
-
-  function openPaymentEditConfirm(id) {
-    pendingEditPaymentId = id;
-    $('#paymentEditConfirmModal').classList.remove('hidden');
-  }
-
-  function closePaymentEditConfirm() {
-    pendingEditPaymentId = null;
-    $('#paymentEditConfirmModal').classList.add('hidden');
-  }
-
-  function startEditPayment(id) {
-    const item = load(PAYMENT_KEY).map(normalizePayment).find(payment => payment.id === id);
-    if (!item) return;
-    editingPaymentId = id;
-    setPaymentEditMode(true);
-    $('#paymentType').value = item.type || '카드';
-    $('#paymentPlayer').value = item.player || '';
-    $('#paymentAffiliation').value = item.affiliation || '';
-    $('#depositorName').value = item.depositor || '';
-    const isCustom = item.ticketCount === 'custom' || item.ticketLabel === '기타';
-    $('#ticketType').value = isCustom ? 'custom' : String(item.ticketCount || 1);
-    $('#customBasePrice').value = isCustom ? (item.base || '') : '';
-    refreshPrice();
-    if (item.type === '계좌이체') $('#depositorName').value = item.depositor || '';
-    switchMain('payment');
-    switchSub('payment', 'paymentAdd');
-    setTimeout(() => {
-      $('#paymentForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
-      $('#paymentPlayer').focus();
-    }, 60);
-  }
-
-  window.requestEditPayment = function(id) {
-    openPaymentEditConfirm(id);
-  };
-
-  $('#paymentEditConfirmCancel').addEventListener('click', closePaymentEditConfirm);
-  $('#paymentEditConfirmModal').addEventListener('click', (e) => {
-    if (e.target === $('#paymentEditConfirmModal')) closePaymentEditConfirm();
-  });
-  $('#paymentEditConfirmSave').addEventListener('click', () => {
-    if (!pendingEditPaymentId) return;
-    const id = pendingEditPaymentId;
-    closePaymentEditConfirm();
-    startEditPayment(id);
-  });
-
   function normalizeTrial(item) {
-    return {
-      ...item,
-      status: item.status || 'scheduled',
-      statusReason: item.statusReason || '',
-      statusChangedAt: item.statusChangedAt || ''
-    };
+    return { ...item, status: item.status || 'scheduled', statusReason: item.statusReason || '', statusChangedAt: item.statusChangedAt || '' };
+  }
+
+  function normalizePayment(item) {
+    return { ...item, refreshed: Boolean(item.refreshed), refreshedBy: item.refreshedBy || '', refreshedAt: item.refreshedAt || '', affiliation: item.affiliation || '' };
   }
 
   function renderTrials() {
-    const allTrials = load(TRIAL_KEY).map(normalizeTrial);
-    const trials = allTrials
+    const trials = trialsCache.map(normalizeTrial)
       .filter(item => item.status === activeTrialStatus)
-      .sort((a, b) => new Date(b.statusChangedAt || b.createdAt) - new Date(a.statusChangedAt || a.createdAt));
+      .sort((a,b) => new Date(b.statusChangedAt || b.createdAt) - new Date(a.statusChangedAt || a.createdAt));
     const wrap = $('#trialListWrap');
     const info = statusInfo[activeTrialStatus];
-    if (!trials.length) {
-      wrap.innerHTML = `<div class="empty">${info.label} 상태의 체험 수업이 없습니다.</div>`;
-      return;
-    }
+    if (!trials.length) { wrap.innerHTML = `<div class="empty">${info.label} 상태의 체험 수업이 없습니다.</div>`; return; }
     wrap.innerHTML = trials.map(item => {
       const status = statusInfo[item.status] || statusInfo.scheduled;
-      return `
-      <article class="item-card clickable-card" onclick="requestEditTrial('${item.id}')">
-        <div class="item-head">
-          <div>
-            <div class="item-title">${escapeHtml(item.name)}</div>
-            <div style="font-size:12px;color:var(--sub);margin-top:4px;">등록 ${createdText(item.createdAt)}</div>
-          </div>
-          <span class="badge ${status.badge}">${status.label}</span>
-        </div>
+      return `<article class="item-card clickable-card" onclick="requestEditTrial('${item.id}')">
+        <div class="item-head"><div><div class="item-title">${escapeHtml(item.name)}</div><div style="font-size:12px;color:var(--sub);margin-top:4px;">등록 ${createdText(item.createdAt)}</div></div><span class="badge ${status.badge}">${status.label}</span></div>
         <div class="meta">
           <div class="k">소속</div><div class="v">${escapeHtml(item.team)}</div>
           <div class="k">나이 / 포지션</div><div class="v">${escapeHtml(item.age)}세 / ${escapeHtml(item.position)}</div>
@@ -1055,207 +842,168 @@
           <div class="k">특이사항</div><div class="v">${item.note ? escapeHtml(item.note) : '-'}</div>
         </div>
         ${item.statusReason ? `<div class="reason-box"><strong>${status.label} 사유</strong><br>${escapeHtml(item.statusReason)}</div>` : ''}
-        ${item.status === 'scheduled' ? `
-          <div class="item-actions">
-            <button class="action-btn delete" onclick="event.stopPropagation(); deleteTrial('${item.id}')">삭제</button>
-            <button class="action-btn register" onclick="event.stopPropagation(); changeTrialStatus('${item.id}','registered')">등록</button>
-            <button class="action-btn wait" onclick="event.stopPropagation(); changeTrialStatus('${item.id}','waiting')">대기</button>
-            <button class="action-btn fail" onclick="event.stopPropagation(); changeTrialStatus('${item.id}','failed')">실패</button>
-          </div>` : item.status === 'registered' ? `
-          <div class="item-actions" style="grid-template-columns:1fr;">
-            <button class="action-btn delete" onclick="event.stopPropagation(); deleteTrial('${item.id}')">삭제</button>
-          </div>` : `
-          <div class="item-actions" style="grid-template-columns:1fr 1fr;">
-            <button class="action-btn register" onclick="event.stopPropagation(); changeTrialStatus('${item.id}','registered')">등록</button>
-            <button class="action-btn delete" onclick="event.stopPropagation(); deleteTrial('${item.id}')">삭제</button>
-          </div>`}
-      </article>
-    `}).join('');
-  }
-
-  function normalizePayment(item) {
-    return {
-      ...item,
-      refreshed: Boolean(item.refreshed),
-      refreshedBy: item.refreshedBy || '',
-      refreshedAt: item.refreshedAt || '',
-      affiliation: item.affiliation || ''
-    };
+        ${item.status === 'scheduled' ? `<div class="item-actions">
+          <button class="action-btn delete" onclick="event.stopPropagation(); deleteTrial('${item.id}')">삭제</button>
+          <button class="action-btn register" onclick="event.stopPropagation(); changeTrialStatus('${item.id}','registered')">등록</button>
+          <button class="action-btn wait" onclick="event.stopPropagation(); changeTrialStatus('${item.id}','waiting')">대기</button>
+          <button class="action-btn fail" onclick="event.stopPropagation(); changeTrialStatus('${item.id}','failed')">실패</button></div>` : item.status === 'registered' ? `<div class="item-actions" style="grid-template-columns:1fr;"><button class="action-btn delete" onclick="event.stopPropagation(); deleteTrial('${item.id}')">삭제</button></div>` : `<div class="item-actions" style="grid-template-columns:1fr 1fr;"><button class="action-btn register" onclick="event.stopPropagation(); changeTrialStatus('${item.id}','registered')">등록</button><button class="action-btn delete" onclick="event.stopPropagation(); deleteTrial('${item.id}')">삭제</button></div>`}
+      </article>`;
+    }).join('');
   }
 
   function renderPayments() {
-    const payments = load(PAYMENT_KEY)
-      .map(normalizePayment)
+    const payments = paymentsCache.map(normalizePayment)
       .filter(item => activePaymentStatus === 'refreshed' ? item.refreshed : !item.refreshed)
-      .sort((a, b) => {
-        const aDate = activePaymentStatus === 'refreshed' ? (a.refreshedAt || a.createdAt) : a.createdAt;
-        const bDate = activePaymentStatus === 'refreshed' ? (b.refreshedAt || b.createdAt) : b.createdAt;
-        return new Date(bDate) - new Date(aDate);
-      });
+      .sort((a,b) => new Date((activePaymentStatus === 'refreshed' ? b.refreshedAt : b.createdAt) || b.createdAt) - new Date((activePaymentStatus === 'refreshed' ? a.refreshedAt : a.createdAt) || a.createdAt));
     const wrap = $('#paymentListWrap');
-    if (!payments.length) {
-      wrap.innerHTML = `<div class="empty">${activePaymentStatus === 'refreshed' ? '최신화된 결제 내역이 없습니다.' : '최신화 대기 중인 결제 내역이 없습니다.'}</div>`;
-      return;
-    }
-    wrap.innerHTML = payments.map(item => `
-      <article class="item-card clickable-card ${item.refreshed ? 'payment-refreshed' : ''}" onclick="requestEditPayment('${item.id}')">
-        <div class="item-head">
-          <div>
-            <div class="item-title">${escapeHtml(item.player)}</div>
-            <div style="font-size:12px;color:var(--sub);margin-top:4px;">결제 ${createdText(item.createdAt)}</div>
-          </div>
-          <span class="badge ${item.refreshed ? 'registered' : ''}">${item.refreshed ? '최신화 완료' : escapeHtml(item.type)}</span>
-        </div>
-        <div class="meta">
-          <div class="k">소속</div><div class="v">${escapeHtml(item.affiliation || '-')}</div>
-          <div class="k">결제 유형</div><div class="v">${escapeHtml(item.type)}</div>
-          <div class="k">이용권</div><div class="v">${escapeHtml(item.ticketLabel || (item.ticketCount === 'custom' ? '기타' : `${item.ticketCount}회권`))}</div>
-          ${item.type === '계좌이체' ? `<div class="k">입금자명</div><div class="v">${escapeHtml(item.depositor)}</div>` : ''}
-          <div class="k">기본 금액</div><div class="v">${money(item.base)}</div>
-          <div class="k">부가세</div><div class="v">${item.vat ? money(item.vat) : '없음'}</div>
-          <div class="k">최종 금액</div><div class="v" style="color:${item.refreshed ? 'var(--success)' : 'var(--blue)'};font-weight:850;">${money(item.total)}</div>
-        </div>
-        ${item.refreshed ? `
-          <div class="refresh-info">
-            최신화 트레이너 : ${escapeHtml(item.refreshedBy)}<br>
-            최신화 일시 : ${createdText(item.refreshedAt)}
-          </div>` : ''}
-        <div class="payment-actions">
-          <button class="payment-action-btn delete" onclick="event.stopPropagation(); deletePayment('${item.id}')">삭제</button>
-          <button class="payment-action-btn refresh" onclick="event.stopPropagation(); openRefreshPayment('${item.id}')">${item.refreshed ? '다시 최신화' : '최신화'}</button>
-        </div>
-      </article>
-    `).join('');
+    if (!payments.length) { wrap.innerHTML = `<div class="empty">${activePaymentStatus === 'refreshed' ? '최신화된 결제 내역이 없습니다.' : '최신화 대기 중인 결제 내역이 없습니다.'}</div>`; return; }
+    wrap.innerHTML = payments.map(item => `<article class="item-card clickable-card ${item.refreshed ? 'payment-refreshed' : ''}" onclick="requestEditPayment('${item.id}')">
+      <div class="item-head"><div><div class="item-title">${escapeHtml(item.player)}</div><div style="font-size:12px;color:var(--sub);margin-top:4px;">결제 ${createdText(item.createdAt)}</div></div><span class="badge ${item.refreshed ? 'registered' : ''}">${item.refreshed ? '최신화 완료' : escapeHtml(item.type)}</span></div>
+      <div class="meta">
+        <div class="k">소속</div><div class="v">${escapeHtml(item.affiliation || '-')}</div>
+        <div class="k">결제 유형</div><div class="v">${escapeHtml(item.type)}</div>
+        <div class="k">이용권</div><div class="v">${escapeHtml(item.ticketLabel || (item.ticketCount === 'custom' ? '기타' : `${item.ticketCount}회권`))}</div>
+        ${item.type === '계좌이체' ? `<div class="k">입금자명</div><div class="v">${escapeHtml(item.depositor)}</div>` : ''}
+        <div class="k">기본 금액</div><div class="v">${money(item.base)}</div>
+        <div class="k">부가세</div><div class="v">${item.vat ? money(item.vat) : '없음'}</div>
+        <div class="k">최종 금액</div><div class="v" style="color:${item.refreshed ? 'var(--success)' : 'var(--blue)'};font-weight:850;">${money(item.total)}</div>
+      </div>
+      ${item.refreshed ? `<div class="refresh-info">최신화 트레이너 : ${escapeHtml(item.refreshedBy)}<br>최신화 일시 : ${createdText(item.refreshedAt)}</div>` : ''}
+      <div class="payment-actions">
+        <button class="payment-action-btn delete" onclick="event.stopPropagation(); deletePayment('${item.id}')">삭제</button>
+        <button class="payment-action-btn refresh" onclick="event.stopPropagation(); openRefreshPayment('${item.id}')">${item.refreshed ? '다시 최신화' : '최신화'}</button>
+      </div></article>`).join('');
   }
 
+  $$('.main-tab').forEach(btn => btn.addEventListener('click', () => switchMain(btn.dataset.main)));
+  $$('.sub-tab').forEach(btn => btn.addEventListener('click', () => switchSub(btn.dataset.group, btn.dataset.target)));
+  $('#trialScheduleType').addEventListener('change', refreshTrialDateMode);
+  $('#paymentType').addEventListener('change', refreshPrice);
+  $('#ticketType').addEventListener('change', refreshPrice);
+  $('#customBasePrice').addEventListener('input', refreshPrice);
 
-  $$('.payment-status-tab').forEach(btn => btn.addEventListener('click', () => {
-    activePaymentStatus = btn.dataset.paymentStatus;
-    $$('.payment-status-tab').forEach(tab => tab.classList.toggle('active', tab === btn));
-    renderPayments();
-  }));
+  $('#trialForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const scheduleType = $('#trialScheduleType').value;
+    const payload = {
+      name: $('#trialName').value.trim(), team: $('#trialTeam').value.trim(), age: $('#trialAge').value,
+      position: $('#trialPosition').value.trim(), trainer: $('#trialTrainer').value.trim(),
+      dateTime: scheduleType === 'undecided' ? '미정' : $('#trialDateTime').value,
+      note: $('#trialNote').value.trim(), updatedAt: new Date().toISOString()
+    };
+    try {
+      if (editingTrialId) {
+        await updateDoc(doc(db, 'trialLessons', editingTrialId), payload);
+        clearTrialEditMode(); switchSub('trial','trialList'); toast('체험 수업이 수정되었습니다.');
+      } else {
+        const id = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
+        await setDoc(doc(db, 'trialLessons', id), { id, ...payload, status:'scheduled', statusReason:'', statusChangedAt:'', createdAt:new Date().toISOString() });
+        e.target.reset(); refreshTrialDateMode(); switchSub('trial','trialList'); toast('체험 수업이 저장되었습니다.');
+      }
+    } catch (err) { console.error(err); toast('저장에 실패했습니다. 인터넷 연결과 Firestore 규칙을 확인해 주세요.'); }
+  });
 
-  $$('.status-tab').forEach(btn => btn.addEventListener('click', () => {
-    activeTrialStatus = btn.dataset.status;
-    $$('.status-tab').forEach(tab => tab.classList.toggle('active', tab === btn));
-    renderTrials();
-  }));
+  $('#paymentForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const { type, count, isCustom, base, vat, total } = paymentValues();
+    const depositor = $('#depositorName').value.trim();
+    if (type === '계좌이체' && !depositor) { toast('입금자명을 입력해 주세요.'); return $('#depositorName').focus(); }
+    if (isCustom && base <= 0) { toast('기타 기본 금액을 입력해 주세요.'); return $('#customBasePrice').focus(); }
+    const payload = { type, player:$('#paymentPlayer').value.trim(), affiliation:$('#paymentAffiliation').value.trim(), depositor, ticketCount:count, ticketLabel:isCustom?'기타':`${count}회권`, base, vat, total, updatedAt:new Date().toISOString() };
+    try {
+      if (editingPaymentId) {
+        await updateDoc(doc(db, 'payments', editingPaymentId), payload);
+        clearPaymentEditMode(); switchSub('payment','paymentList'); toast('결제 내역이 수정되었습니다.');
+      } else {
+        const id = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
+        await setDoc(doc(db, 'payments', id), { id, ...payload, refreshed:false, refreshedBy:'', refreshedAt:'', createdAt:new Date().toISOString() });
+        e.target.reset(); refreshPrice(); switchSub('payment','paymentList'); toast('결제 내역이 저장되었습니다.');
+      }
+    } catch (err) { console.error(err); toast('저장에 실패했습니다. 인터넷 연결과 Firestore 규칙을 확인해 주세요.'); }
+  });
 
-  function persistTrialStatus(id, status, reason = '') {
-    const trials = load(TRIAL_KEY).map(normalizeTrial).map(item => item.id === id ? {
-      ...item,
-      status,
-      statusReason: reason,
-      statusChangedAt: new Date().toISOString()
-    } : item);
-    save(TRIAL_KEY, trials);
-    renderTrials();
-    toast(`${statusInfo[status].label} 상태로 변경되었습니다.`);
+  $('#trialCancelEditBtn').addEventListener('click', () => { clearTrialEditMode(); toast('수정이 취소되었습니다.'); });
+  $('#paymentCancelEditBtn').addEventListener('click', () => { clearPaymentEditMode(); toast('수정이 취소되었습니다.'); });
+
+  function closeReasonModal(){ $('#reasonModal').classList.add('hidden'); pendingReasonChange=null; $('#reasonInput').value=''; }
+  function closeRefreshModal(){ $('#refreshModal').classList.add('hidden'); pendingRefreshPaymentId=null; $('#refreshTrainerInput').value=''; }
+  function closeTrialEditConfirm(){ pendingEditTrialId=null; $('#trialEditConfirmModal').classList.add('hidden'); }
+  function closePaymentEditConfirm(){ pendingEditPaymentId=null; $('#paymentEditConfirmModal').classList.add('hidden'); }
+
+  window.requestEditTrial = id => { pendingEditTrialId=id; $('#trialEditConfirmModal').classList.remove('hidden'); };
+  window.requestEditPayment = id => { pendingEditPaymentId=id; $('#paymentEditConfirmModal').classList.remove('hidden'); };
+
+  function startEditTrial(id){
+    const item=trialsCache.map(normalizeTrial).find(x=>x.id===id); if(!item)return;
+    editingTrialId=id; setTrialEditMode(true);
+    $('#trialName').value=item.name||''; $('#trialTeam').value=item.team||''; $('#trialAge').value=item.age||''; $('#trialPosition').value=item.position||''; $('#trialTrainer').value=item.trainer||''; $('#trialNote').value=item.note||'';
+    $('#trialScheduleType').value=item.dateTime==='미정'?'undecided':'fixed'; refreshTrialDateMode(); $('#trialDateTime').value=item.dateTime==='미정'?'':(item.dateTime||'');
+    switchMain('trial'); switchSub('trial','trialAdd'); setTimeout(()=>$('#trialForm').scrollIntoView({behavior:'smooth',block:'start'}),60);
   }
 
-  window.changeTrialStatus = function(id, status) {
-    if (status === 'waiting' || status === 'failed') {
-      pendingReasonChange = { id, status };
-      $('#reasonModalTitle').textContent = `${statusInfo[status].label} 사유 입력`;
-      $('#reasonModalDesc').textContent = `${statusInfo[status].label} 상태로 변경하는 사유를 입력해 주세요.`;
-      $('#reasonInput').value = '';
-      $('#reasonModal').classList.remove('hidden');
-      setTimeout(() => $('#reasonInput').focus(), 50);
-      return;
-    }
-    persistTrialStatus(id, status, '');
-  };
-
-  function closeReasonModal() {
-    $('#reasonModal').classList.add('hidden');
-    pendingReasonChange = null;
-    $('#reasonInput').value = '';
+  function startEditPayment(id){
+    const item=paymentsCache.map(normalizePayment).find(x=>x.id===id); if(!item)return;
+    editingPaymentId=id; setPaymentEditMode(true);
+    $('#paymentType').value=item.type||'카드'; $('#paymentPlayer').value=item.player||''; $('#paymentAffiliation').value=item.affiliation||'';
+    const isCustom=item.ticketCount==='custom'||item.ticketLabel==='기타'; $('#ticketType').value=isCustom?'custom':String(item.ticketCount||1); $('#customBasePrice').value=isCustom?(item.base||''):''; refreshPrice(); if(item.type==='계좌이체')$('#depositorName').value=item.depositor||'';
+    switchMain('payment'); switchSub('payment','paymentAdd'); setTimeout(()=>$('#paymentForm').scrollIntoView({behavior:'smooth',block:'start'}),60);
   }
 
-  $('#reasonCancel').addEventListener('click', closeReasonModal);
-  $('#reasonModal').addEventListener('click', (e) => {
-    if (e.target === $('#reasonModal')) closeReasonModal();
-  });
-  $('#reasonSave').addEventListener('click', () => {
-    if (!pendingReasonChange) return;
-    const reason = $('#reasonInput').value.trim();
-    if (!reason) {
-      toast('사유를 입력해 주세요.');
-      $('#reasonInput').focus();
-      return;
+  $('#trialEditConfirmCancel').addEventListener('click', closeTrialEditConfirm);
+  $('#trialEditConfirmSave').addEventListener('click', ()=>{ if(!pendingEditTrialId)return; const id=pendingEditTrialId; closeTrialEditConfirm(); startEditTrial(id); });
+  $('#paymentEditConfirmCancel').addEventListener('click', closePaymentEditConfirm);
+  $('#paymentEditConfirmSave').addEventListener('click', ()=>{ if(!pendingEditPaymentId)return; const id=pendingEditPaymentId; closePaymentEditConfirm(); startEditPayment(id); });
+  $('#trialEditConfirmModal').addEventListener('click',e=>{if(e.target===$('#trialEditConfirmModal'))closeTrialEditConfirm();});
+  $('#paymentEditConfirmModal').addEventListener('click',e=>{if(e.target===$('#paymentEditConfirmModal'))closePaymentEditConfirm();});
+
+  window.changeTrialStatus = function(id,status){
+    if(status==='waiting'||status==='failed'){
+      pendingReasonChange={id,status}; $('#reasonModalTitle').textContent=`${statusInfo[status].label} 사유 입력`; $('#reasonModalDesc').textContent=`${statusInfo[status].label} 상태로 변경하는 사유를 입력해 주세요.`; $('#reasonInput').value=''; $('#reasonModal').classList.remove('hidden'); setTimeout(()=>$('#reasonInput').focus(),50); return;
     }
-    const { id, status } = pendingReasonChange;
-    closeReasonModal();
-    persistTrialStatus(id, status, reason);
-  });
-
-  window.deleteTrial = function(id) {
-    if (!confirm('이 체험 수업을 삭제할까요?')) return;
-    save(TRIAL_KEY, load(TRIAL_KEY).filter(item => item.id !== id));
-    if (editingTrialId === id) clearTrialEditMode();
-    renderTrials();
-    toast('삭제되었습니다.');
+    persistTrialStatus(id,status,'');
   };
 
-  window.openRefreshPayment = function(id) {
-    pendingRefreshPaymentId = id;
-    $('#refreshTrainerInput').value = '';
-    $('#refreshModal').classList.remove('hidden');
-    setTimeout(() => $('#refreshTrainerInput').focus(), 50);
-  };
-
-  function closeRefreshModal() {
-    $('#refreshModal').classList.add('hidden');
-    pendingRefreshPaymentId = null;
-    $('#refreshTrainerInput').value = '';
+  async function persistTrialStatus(id,status,reason=''){
+    try { await updateDoc(doc(db,'trialLessons',id),{status,statusReason:reason,statusChangedAt:new Date().toISOString(),updatedAt:new Date().toISOString()}); toast(`${statusInfo[status].label} 상태로 변경되었습니다.`); }
+    catch(err){console.error(err);toast('상태 변경에 실패했습니다.');}
   }
 
-  $('#refreshCancel').addEventListener('click', closeRefreshModal);
-  $('#refreshModal').addEventListener('click', (e) => {
-    if (e.target === $('#refreshModal')) closeRefreshModal();
-  });
-  $('#refreshSave').addEventListener('click', () => {
-    if (!pendingRefreshPaymentId) return;
-    const trainer = $('#refreshTrainerInput').value.trim();
-    if (!trainer) {
-      toast('최신화한 트레이너 이름을 입력해 주세요.');
-      $('#refreshTrainerInput').focus();
-      return;
-    }
-    const id = pendingRefreshPaymentId;
-    const payments = load(PAYMENT_KEY).map(normalizePayment).map(item => item.id === id ? {
-      ...item,
-      refreshed: true,
-      refreshedBy: trainer,
-      refreshedAt: new Date().toISOString()
-    } : item);
-    save(PAYMENT_KEY, payments);
-    closeRefreshModal();
-    activePaymentStatus = 'refreshed';
-    $$('.payment-status-tab').forEach(tab => tab.classList.toggle('active', tab.dataset.paymentStatus === 'refreshed'));
-    renderPayments();
-    toast('최신화 목록으로 이동했습니다.');
-  });
+  $('#reasonCancel').addEventListener('click',closeReasonModal);
+  $('#reasonModal').addEventListener('click',e=>{if(e.target===$('#reasonModal'))closeReasonModal();});
+  $('#reasonSave').addEventListener('click',()=>{ if(!pendingReasonChange)return; const reason=$('#reasonInput').value.trim(); if(!reason){toast('사유를 입력해 주세요.');return;} const {id,status}=pendingReasonChange; closeReasonModal(); persistTrialStatus(id,status,reason); });
 
-  $('#refreshTrainerInput').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      $('#refreshSave').click();
-    }
+  window.deleteTrial = async id => { if(!confirm('이 체험 수업을 삭제할까요?'))return; try{await deleteDoc(doc(db,'trialLessons',id)); if(editingTrialId===id)clearTrialEditMode(); toast('삭제되었습니다.');}catch(err){console.error(err);toast('삭제에 실패했습니다.');} };
+  window.deletePayment = async id => { if(!confirm('이 결제 내역을 삭제할까요?'))return; try{await deleteDoc(doc(db,'payments',id)); if(editingPaymentId===id)clearPaymentEditMode(); toast('삭제되었습니다.');}catch(err){console.error(err);toast('삭제에 실패했습니다.');} };
+
+  window.openRefreshPayment = id => { pendingRefreshPaymentId=id; $('#refreshTrainerInput').value=''; $('#refreshModal').classList.remove('hidden'); setTimeout(()=>$('#refreshTrainerInput').focus(),50); };
+  $('#refreshCancel').addEventListener('click',closeRefreshModal);
+  $('#refreshModal').addEventListener('click',e=>{if(e.target===$('#refreshModal'))closeRefreshModal();});
+  $('#refreshSave').addEventListener('click',async()=>{
+    if(!pendingRefreshPaymentId)return; const trainer=$('#refreshTrainerInput').value.trim(); if(!trainer){toast('최신화한 트레이너 이름을 입력해 주세요.');return;}
+    const id=pendingRefreshPaymentId; try{await updateDoc(doc(db,'payments',id),{refreshed:true,refreshedBy:trainer,refreshedAt:new Date().toISOString(),updatedAt:new Date().toISOString()}); closeRefreshModal(); activePaymentStatus='refreshed'; $$('.payment-status-tab').forEach(tab=>tab.classList.toggle('active',tab.dataset.paymentStatus==='refreshed')); toast('최신화 목록으로 이동했습니다.');}catch(err){console.error(err);toast('최신화에 실패했습니다.');}
   });
+  $('#refreshTrainerInput').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('#refreshSave').click();}});
 
-  window.deletePayment = function(id) {
-    if (!confirm('이 결제 내역을 삭제할까요?')) return;
-    save(PAYMENT_KEY, load(PAYMENT_KEY).filter(item => item.id !== id));
-    if (editingPaymentId === id) clearPaymentEditMode();
-    renderPayments();
-    toast('삭제되었습니다.');
-  };
+  $$('.status-tab[data-status]').forEach(btn=>btn.addEventListener('click',()=>{activeTrialStatus=btn.dataset.status;$$('.status-tab[data-status]').forEach(tab=>tab.classList.toggle('active',tab===btn));renderTrials();}));
+  $$('.payment-status-tab').forEach(btn=>btn.addEventListener('click',()=>{activePaymentStatus=btn.dataset.paymentStatus;$$('.payment-status-tab').forEach(tab=>tab.classList.toggle('active',tab===btn));renderPayments();}));
 
-  refreshTrialDateMode();
-  refreshPrice();
-  renderTrials();
-  renderPayments();
+  onSnapshot(trialsRef, snap => { trialsCache=snap.docs.map(d=>({id:d.id,...d.data()})); renderTrials(); }, err=>{console.error(err);toast('체험 수업 데이터를 불러오지 못했습니다.');});
+  onSnapshot(paymentsRef, snap => { paymentsCache=snap.docs.map(d=>({id:d.id,...d.data()})); renderPayments(); }, err=>{console.error(err);toast('결제 데이터를 불러오지 못했습니다.');});
+
+  async function migrateLocalDataOnce(){
+    if(localStorage.getItem(MIGRATION_KEY)==='done')return;
+    const oldTrials=legacyLoad(TRIAL_KEY).map(normalizeTrial);
+    const oldPayments=legacyLoad(PAYMENT_KEY).map(normalizePayment);
+    if(!oldTrials.length&&!oldPayments.length){localStorage.setItem(MIGRATION_KEY,'done');return;}
+    try{
+      const batch=writeBatch(db);
+      oldTrials.forEach((item,i)=>{const id=item.id||`legacy-trial-${Date.now()}-${i}`;batch.set(doc(db,'trialLessons',id),{...item,id});});
+      oldPayments.forEach((item,i)=>{const id=item.id||`legacy-payment-${Date.now()}-${i}`;batch.set(doc(db,'payments',id),{...item,id});});
+      await batch.commit(); localStorage.setItem(MIGRATION_KEY,'done'); toast('이 휴대폰의 기존 기록을 공용 데이터로 이전했습니다.');
+    }catch(err){console.error(err);toast('기존 기록 이전에 실패했습니다. 나중에 다시 시도됩니다.');}
+  }
+
+  refreshTrialDateMode(); refreshPrice(); renderTrials(); renderPayments(); migrateLocalDataOnce();
 </script>
 </body>
 </html>
