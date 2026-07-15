@@ -1,0 +1,1261 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>체험 수업 및 결제 관리</title>
+  <style>
+    :root {
+      --blue: #1769e0;
+      --blue-dark: #0d4fb8;
+      --blue-soft: #eaf2ff;
+      --line: #dbe3ef;
+      --text: #172033;
+      --sub: #6b7485;
+      --bg: #f5f7fb;
+      --white: #ffffff;
+      --danger: #e5484d;
+      --success: #0f9f6e;
+      --shadow: 0 10px 28px rgba(22, 52, 94, .08);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--text);
+      background: var(--bg);
+      font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+
+    .app {
+      width: min(100%, 560px);
+      min-height: 100vh;
+      margin: 0 auto;
+      background: var(--white);
+      box-shadow: 0 0 40px rgba(24, 45, 80, .08);
+    }
+
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      padding: max(18px, env(safe-area-inset-top)) 18px 14px;
+      background: var(--blue);
+      color: white;
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 21px;
+      font-weight: 800;
+      letter-spacing: -.4px;
+    }
+
+    .main-tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      background: var(--white);
+      border-bottom: 1px solid var(--line);
+      position: sticky;
+      top: 58px;
+      z-index: 15;
+    }
+
+    .main-tab {
+      border: 0;
+      background: white;
+      padding: 15px 8px 13px;
+      color: var(--sub);
+      font-weight: 700;
+      position: relative;
+    }
+
+    .main-tab.active { color: var(--blue); }
+    .main-tab.active::after {
+      content: "";
+      position: absolute;
+      left: 22%;
+      right: 22%;
+      bottom: -1px;
+      height: 3px;
+      border-radius: 99px 99px 0 0;
+      background: var(--blue);
+    }
+
+    .content { padding: 15px 16px 34px; }
+
+    .sub-tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 14px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .sub-tab {
+      border: 1px solid var(--line);
+      background: white;
+      color: var(--sub);
+      min-height: 42px;
+      border-radius: 10px;
+      font-weight: 700;
+    }
+
+    .sub-tab.active {
+      color: white;
+      border-color: var(--blue);
+      background: var(--blue);
+    }
+
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    .form-card,
+    .list-card {
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+    }
+
+    .section-title {
+      margin: 0 0 14px;
+      font-size: 17px;
+      font-weight: 800;
+    }
+
+    .field { margin-bottom: 14px; }
+    .field:last-child { margin-bottom: 0; }
+
+    label {
+      display: block;
+      margin-bottom: 7px;
+      font-size: 13px;
+      font-weight: 750;
+      color: #30394a;
+    }
+
+    .required::after {
+      content: " *";
+      color: var(--danger);
+    }
+
+    input, select, textarea {
+      width: 100%;
+      border: 1px solid #cfd8e6;
+      border-radius: 10px;
+      background: white;
+      color: var(--text);
+      outline: none;
+      padding: 12px 13px;
+      transition: .15s ease;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(23, 105, 224, .12);
+    }
+
+    textarea { min-height: 92px; resize: vertical; }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .price-box {
+      border: 1px solid #cfe0ff;
+      background: var(--blue-soft);
+      border-radius: 12px;
+      padding: 14px;
+      margin: 4px 0 16px;
+    }
+
+    .price-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      font-size: 13px;
+      color: var(--sub);
+      margin-bottom: 7px;
+    }
+
+    .price-row:last-child {
+      margin-bottom: 0;
+      padding-top: 8px;
+      border-top: 1px solid #bfd4f7;
+      color: var(--text);
+      font-size: 16px;
+      font-weight: 850;
+    }
+
+    .primary-btn {
+      width: 100%;
+      border: 0;
+      border-radius: 11px;
+      min-height: 48px;
+      color: white;
+      background: var(--blue);
+      font-weight: 800;
+    }
+
+    .primary-btn:active { background: var(--blue-dark); transform: translateY(1px); }
+
+    .list-wrap { display: grid; gap: 11px; }
+
+    .item-card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+      background: white;
+      box-shadow: 0 6px 20px rgba(22, 52, 94, .055);
+    }
+
+    .item-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+      padding-bottom: 10px;
+      margin-bottom: 10px;
+      border-bottom: 1px solid #edf1f6;
+    }
+
+    .item-title {
+      font-size: 16px;
+      font-weight: 850;
+      line-height: 1.3;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 0 9px;
+      border-radius: 99px;
+      background: var(--blue-soft);
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .meta {
+      display: grid;
+      grid-template-columns: 90px 1fr;
+      gap: 7px 10px;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .meta .k { color: var(--sub); }
+    .meta .v { color: var(--text); font-weight: 650; word-break: break-word; }
+
+    .item-actions {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 7px;
+      margin-top: 14px;
+    }
+
+    .action-btn {
+      border: 1px solid var(--line);
+      background: white;
+      color: var(--text);
+      border-radius: 9px;
+      min-height: 38px;
+      padding: 7px 4px;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .action-btn.register { border-color: #b8e8d7; color: #087a55; background: #f0fbf7; }
+    .action-btn.wait { border-color: #f5d78b; color: #9b6a00; background: #fffaf0; }
+    .action-btn.fail { border-color: #ffc4c7; color: var(--danger); background: #fff7f7; }
+    .action-btn.delete { border-color: #d8dee8; color: var(--sub); background: #fafbfc; }
+
+    .payment-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .payment-action-btn {
+      border-radius: 9px;
+      min-height: 40px;
+      padding: 8px 6px;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .payment-action-btn.delete {
+      border: 1px solid #ffc4c7;
+      color: var(--danger);
+      background: #fff7f7;
+    }
+
+    .payment-action-btn.refresh {
+      border: 1px solid #9bd8bd;
+      color: #087a55;
+      background: #f0fbf7;
+    }
+
+    .item-card.payment-refreshed {
+      border-color: #73c9a3;
+      background: #f1fbf6;
+      box-shadow: 0 8px 24px rgba(15, 159, 110, .13);
+    }
+
+    .item-card.payment-refreshed .item-head {
+      border-bottom-color: #cfeedd;
+    }
+
+    .refresh-info {
+      margin-top: 13px;
+      padding-top: 11px;
+      border-top: 1px solid #cfeedd;
+      color: #087a55;
+      font-size: 12px;
+      font-weight: 750;
+      line-height: 1.55;
+    }
+
+    .status-tabs {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+
+    .status-tab {
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      min-height: 38px;
+      padding: 6px 2px;
+      background: white;
+      color: var(--sub);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .status-tab.active { color: white; background: var(--blue); border-color: var(--blue); }
+    .badge.registered { color: #087a55; background: #e9f9f3; }
+    .badge.waiting { color: #9b6a00; background: #fff4d8; }
+    .badge.failed { color: var(--danger); background: #fff0f1; }
+
+    .reason-box {
+      margin-top: 11px;
+      padding: 10px 11px;
+      border-radius: 9px;
+      background: #f7f9fc;
+      color: var(--sub);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(14, 23, 38, .46);
+    }
+
+    .modal-card {
+      width: min(100%, 430px);
+      border-radius: 16px;
+      background: white;
+      padding: 18px;
+      box-shadow: 0 18px 50px rgba(0,0,0,.18);
+    }
+
+    .modal-card h3 { margin: 0 0 7px; font-size: 18px; }
+    .modal-card p { margin: 0 0 13px; color: var(--sub); font-size: 13px; line-height: 1.5; }
+    .modal-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+    .modal-actions button { min-height: 43px; border-radius: 10px; font-weight: 800; }
+    .modal-cancel { border: 1px solid var(--line); background: white; color: var(--sub); }
+    .modal-save { border: 0; background: var(--blue); color: white; }
+
+    .empty {
+      border: 1px dashed #cfd8e6;
+      border-radius: 14px;
+      padding: 34px 18px;
+      text-align: center;
+      color: var(--sub);
+      font-size: 14px;
+      background: #fbfcfe;
+    }
+
+    .hidden { display: none !important; }
+    .field-inline-gap { margin-top: 8px; }
+
+    .clickable-card {
+      cursor: pointer;
+      transition: transform .12s ease, box-shadow .12s ease;
+    }
+
+    .clickable-card:active {
+      transform: translateY(1px);
+    }
+
+    .edit-mode-banner {
+      margin: 0 0 14px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: #eef5ff;
+      color: var(--blue);
+      font-size: 13px;
+      font-weight: 750;
+      line-height: 1.5;
+    }
+
+    .form-actions {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+
+    .secondary-btn {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      min-height: 46px;
+      color: var(--sub);
+      background: white;
+      font-weight: 800;
+    }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 24px;
+      transform: translateX(-50%) translateY(20px);
+      width: min(calc(100% - 32px), 480px);
+      padding: 13px 15px;
+      background: #142033;
+      color: white;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 700;
+      opacity: 0;
+      pointer-events: none;
+      transition: .22s ease;
+      z-index: 50;
+      text-align: center;
+    }
+
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    @media (max-width: 380px) {
+      .two-col { grid-template-columns: 1fr; }
+      .meta { grid-template-columns: 78px 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <header class="header">
+    <h1>체험 수업 및 결제 관리</h1>
+  </header>
+
+  <nav class="main-tabs">
+    <button class="main-tab active" data-main="trial">체험 수업 관리</button>
+    <button class="main-tab" data-main="payment">결제 관리</button>
+  </nav>
+
+  <main class="content">
+    <section id="trialSection">
+      <div class="sub-tabs">
+        <button class="sub-tab active" data-group="trial" data-target="trialAdd">추가</button>
+        <button class="sub-tab" data-group="trial" data-target="trialList">목록</button>
+      </div>
+
+      <div id="trialAdd" class="panel active">
+        <form id="trialForm" class="form-card">
+          <h2 id="trialFormTitle" class="section-title">체험 수업 추가</h2>
+          <div id="trialEditBanner" class="edit-mode-banner hidden">수정할 카드를 불러왔습니다. 내용을 변경한 뒤 저장해 주세요.</div>
+          <div class="field">
+            <label class="required" for="trialName">이름</label>
+            <input id="trialName" required placeholder="선수 이름 입력" />
+          </div>
+          <div class="field">
+            <label class="required" for="trialTeam">소속</label>
+            <input id="trialTeam" required placeholder="학교 또는 팀 입력" />
+          </div>
+          <div class="two-col">
+            <div class="field">
+              <label class="required" for="trialAge">나이</label>
+              <input id="trialAge" type="number" min="1" max="100" required placeholder="예: 15" />
+            </div>
+            <div class="field">
+              <label class="required" for="trialPosition">포지션</label>
+              <input id="trialPosition" required placeholder="예: FW" />
+            </div>
+          </div>
+          <div class="field">
+            <label class="required" for="trialTrainer">담당 트레이너</label>
+            <input id="trialTrainer" required placeholder="담당 트레이너 이름" />
+          </div>
+          <div class="field">
+            <label class="required" for="trialScheduleType">체험 수업 예정일 및 시간</label>
+            <select id="trialScheduleType">
+              <option value="fixed">예정일 선택</option>
+              <option value="undecided">미정</option>
+            </select>
+            <div id="trialDateTimeField" class="field-inline-gap">
+              <input id="trialDateTime" type="datetime-local" required />
+            </div>
+          </div>
+          <div class="field">
+            <label for="trialNote">특이사항</label>
+            <textarea id="trialNote" placeholder="부상 이력, 요청사항 등"></textarea>
+          </div>
+          <div class="form-actions">
+            <button id="trialSubmitBtn" class="primary-btn" type="submit">체험 수업 저장</button>
+            <button id="trialCancelEditBtn" class="secondary-btn hidden" type="button">수정 취소</button>
+          </div>
+        </form>
+      </div>
+
+      <div id="trialList" class="panel">
+        <div class="status-tabs" aria-label="체험 수업 상태 필터">
+          <button class="status-tab active" data-status="scheduled">체험 예정</button>
+          <button class="status-tab" data-status="registered">등록</button>
+          <button class="status-tab" data-status="waiting">대기</button>
+          <button class="status-tab" data-status="failed">실패</button>
+        </div>
+        <div id="trialListWrap" class="list-wrap"></div>
+      </div>
+    </section>
+
+    <section id="paymentSection" class="hidden">
+      <div class="sub-tabs">
+        <button class="sub-tab active" data-group="payment" data-target="paymentAdd">추가</button>
+        <button class="sub-tab" data-group="payment" data-target="paymentList">목록</button>
+      </div>
+
+      <div id="paymentAdd" class="panel active">
+        <form id="paymentForm" class="form-card">
+          <h2 id="paymentFormTitle" class="section-title">결제 추가</h2>
+          <div id="paymentEditBanner" class="edit-mode-banner hidden">수정할 결제 내역을 불러왔습니다. 내용을 변경한 뒤 저장해 주세요.</div>
+          <div class="field">
+            <label class="required" for="paymentType">결제 유형</label>
+            <select id="paymentType" required>
+              <option value="카드">카드</option>
+              <option value="계좌이체">계좌이체</option>
+              <option value="현금">현금</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="required" for="paymentPlayer">선수 이름</label>
+            <input id="paymentPlayer" required placeholder="선수 이름 입력" />
+          </div>
+          <div class="field">
+            <label class="required" for="paymentAffiliation">소속</label>
+            <input id="paymentAffiliation" required placeholder="소속 입력" />
+          </div>
+          <div id="depositorField" class="field hidden">
+            <label class="required" for="depositorName">입금자명</label>
+            <input id="depositorName" placeholder="입금자명 입력" />
+          </div>
+          <div class="field">
+            <label class="required" for="ticketType">이용권</label>
+            <select id="ticketType" required>
+              <option value="1">1회권</option>
+              <option value="4">4회권</option>
+              <option value="10">10회권</option>
+              <option value="custom">기타</option>
+            </select>
+          </div>
+          <div id="customPriceField" class="field hidden">
+            <label class="required" for="customBasePrice">기본 금액</label>
+            <input id="customBasePrice" type="number" min="1" step="1000" inputmode="numeric" placeholder="기본 금액 직접 입력" />
+          </div>
+
+          <div class="price-box">
+            <div class="price-row"><span>기본 금액</span><strong id="basePrice">60,000원</strong></div>
+            <div class="price-row"><span>부가세</span><strong id="vatPrice">6,000원</strong></div>
+            <div class="price-row"><span>최종 결제 금액</span><strong id="totalPrice">66,000원</strong></div>
+          </div>
+
+          <div class="form-actions">
+            <button id="paymentSubmitBtn" class="primary-btn" type="submit">결제 내역 저장</button>
+            <button id="paymentCancelEditBtn" class="secondary-btn hidden" type="button">수정 취소</button>
+          </div>
+        </form>
+      </div>
+
+      <div id="paymentList" class="panel">
+        <div class="status-tabs payment-status-tabs" aria-label="결제 목록 상태 필터">
+          <button class="status-tab payment-status-tab active" data-payment-status="pending">목록</button>
+          <button class="status-tab payment-status-tab" data-payment-status="refreshed">최신화</button>
+        </div>
+        <div id="paymentListWrap" class="list-wrap"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<div id="reasonModal" class="modal-backdrop hidden">
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="reasonModalTitle">
+    <h3 id="reasonModalTitle">사유 입력</h3>
+    <p id="reasonModalDesc">상태 변경 사유를 입력해 주세요.</p>
+    <textarea id="reasonInput" placeholder="사유를 입력해 주세요"></textarea>
+    <div class="modal-actions">
+      <button id="reasonCancel" class="modal-cancel" type="button">취소</button>
+      <button id="reasonSave" class="modal-save" type="button">저장</button>
+    </div>
+  </div>
+</div>
+
+<div id="refreshModal" class="modal-backdrop hidden">
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="refreshModalTitle">
+    <h3 id="refreshModalTitle">결제 내역 최신화</h3>
+    <p>결제 내역을 확인하고 최신화한 트레이너 이름을 입력해 주세요.</p>
+    <input id="refreshTrainerInput" placeholder="트레이너 이름 입력" />
+    <div class="modal-actions">
+      <button id="refreshCancel" class="modal-cancel" type="button">취소</button>
+      <button id="refreshSave" class="modal-save" type="button">최신화</button>
+    </div>
+  </div>
+</div>
+
+<div id="trialEditConfirmModal" class="modal-backdrop hidden">
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="trialEditConfirmTitle">
+    <h3 id="trialEditConfirmTitle">체험 수업 수정</h3>
+    <p>이 카드 내용을 수정하시겠습니까?</p>
+    <div class="modal-actions">
+      <button id="trialEditConfirmCancel" class="modal-cancel" type="button">취소</button>
+      <button id="trialEditConfirmSave" class="modal-save" type="button">수정하기</button>
+    </div>
+  </div>
+</div>
+
+<div id="paymentEditConfirmModal" class="modal-backdrop hidden">
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="paymentEditConfirmTitle">
+    <h3 id="paymentEditConfirmTitle">결제 내역 수정</h3>
+    <p>이 결제 내역을 수정하시겠습니까?</p>
+    <div class="modal-actions">
+      <button id="paymentEditConfirmCancel" class="modal-cancel" type="button">취소</button>
+      <button id="paymentEditConfirmSave" class="modal-save" type="button">수정하기</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const TRIAL_KEY = 'trialLessonManager.trials.v1';
+  const PAYMENT_KEY = 'trialLessonManager.payments.v1';
+  const ticketPrices = { 1: 60000, 4: 240000, 10: 600000 };
+  const statusInfo = {
+    scheduled: { label: '체험 예정', badge: '' },
+    registered: { label: '등록', badge: 'registered' },
+    waiting: { label: '대기', badge: 'waiting' },
+    failed: { label: '실패', badge: 'failed' }
+  };
+  let activeTrialStatus = 'scheduled';
+  let activePaymentStatus = 'pending';
+  let pendingReasonChange = null;
+  let pendingRefreshPaymentId = null;
+  let editingTrialId = null;
+  let pendingEditTrialId = null;
+  let editingPaymentId = null;
+  let pendingEditPaymentId = null;
+
+  const $ = (selector) => document.querySelector(selector);
+  const $$ = (selector) => [...document.querySelectorAll(selector)];
+
+  function load(key) {
+    try { return JSON.parse(localStorage.getItem(key)) || []; }
+    catch { return []; }
+  }
+
+  function save(key, value) {
+    localStorage.setItem(key, JSON.stringify(value));
+  }
+
+  function money(value) {
+    return Number(value || 0).toLocaleString('ko-KR') + '원';
+  }
+
+  function dateText(value) {
+    if (value === '미정') return '미정';
+    if (!value) return '-';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return value;
+    return new Intl.DateTimeFormat('ko-KR', {
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      weekday: 'short', hour: '2-digit', minute: '2-digit'
+    }).format(d);
+  }
+
+  function createdText(value) {
+    const d = new Date(value);
+    return new Intl.DateTimeFormat('ko-KR', {
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit'
+    }).format(d);
+  }
+
+  function escapeHtml(value = '') {
+    return String(value)
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#039;');
+  }
+
+  function toast(message) {
+    const el = $('#toast');
+    el.textContent = message;
+    el.classList.add('show');
+    clearTimeout(toast.timer);
+    toast.timer = setTimeout(() => el.classList.remove('show'), 1800);
+  }
+
+  function switchMain(main) {
+    $$('.main-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.main === main));
+    $('#trialSection').classList.toggle('hidden', main !== 'trial');
+    $('#paymentSection').classList.toggle('hidden', main !== 'payment');
+  }
+
+  function switchSub(group, target) {
+    $$(`.sub-tab[data-group="${group}"]`).forEach(btn => btn.classList.toggle('active', btn.dataset.target === target));
+    const section = group === 'trial' ? $('#trialSection') : $('#paymentSection');
+    section.querySelectorAll('.panel').forEach(panel => panel.classList.toggle('active', panel.id === target));
+  }
+
+  function setTrialEditMode(isEdit) {
+    $('#trialFormTitle').textContent = isEdit ? '체험 수업 수정' : '체험 수업 추가';
+    $('#trialSubmitBtn').textContent = isEdit ? '체험 수업 수정 저장' : '체험 수업 저장';
+    $('#trialEditBanner').classList.toggle('hidden', !isEdit);
+    $('#trialCancelEditBtn').classList.toggle('hidden', !isEdit);
+  }
+
+  function clearTrialEditMode(shouldReset = true) {
+    editingTrialId = null;
+    setTrialEditMode(false);
+    if (shouldReset) {
+      $('#trialForm').reset();
+      refreshTrialDateMode();
+    }
+  }
+
+  function setPaymentEditMode(isEdit) {
+    $('#paymentFormTitle').textContent = isEdit ? '결제 내역 수정' : '결제 추가';
+    $('#paymentSubmitBtn').textContent = isEdit ? '결제 내역 수정 저장' : '결제 내역 저장';
+    $('#paymentEditBanner').classList.toggle('hidden', !isEdit);
+    $('#paymentCancelEditBtn').classList.toggle('hidden', !isEdit);
+  }
+
+  function clearPaymentEditMode(shouldReset = true) {
+    editingPaymentId = null;
+    setPaymentEditMode(false);
+    if (shouldReset) {
+      $('#paymentForm').reset();
+      refreshPrice();
+    }
+  }
+
+  $$('.main-tab').forEach(btn => btn.addEventListener('click', () => switchMain(btn.dataset.main)));
+  $$('.sub-tab').forEach(btn => btn.addEventListener('click', () => switchSub(btn.dataset.group, btn.dataset.target)));
+
+  function paymentValues() {
+    const type = $('#paymentType').value;
+    const ticketValue = $('#ticketType').value;
+    const isCustom = ticketValue === 'custom';
+    const count = isCustom ? 'custom' : Number(ticketValue);
+    const base = isCustom ? Number($('#customBasePrice').value || 0) : ticketPrices[count];
+    const vat = type === '현금' ? 0 : Math.round(base * 0.1);
+    return { type, count, isCustom, base, vat, total: base + vat };
+  }
+
+  function refreshPrice() {
+    const { type, isCustom, base, vat, total } = paymentValues();
+    $('#depositorField').classList.toggle('hidden', type !== '계좌이체');
+    $('#depositorName').required = type === '계좌이체';
+    if (type !== '계좌이체') $('#depositorName').value = '';
+
+    $('#customPriceField').classList.toggle('hidden', !isCustom);
+    $('#customBasePrice').required = isCustom;
+    if (!isCustom) $('#customBasePrice').value = '';
+
+    $('#basePrice').textContent = base > 0 ? money(base) : '직접 입력';
+    $('#vatPrice').textContent = base > 0 ? (vat ? money(vat) : '없음') : '-';
+    $('#totalPrice').textContent = base > 0 ? money(total) : '-';
+  }
+
+  function refreshTrialDateMode() {
+    const undecided = $('#trialScheduleType').value === 'undecided';
+    $('#trialDateTimeField').classList.toggle('hidden', undecided);
+    $('#trialDateTime').required = !undecided;
+    if (undecided) $('#trialDateTime').value = '';
+  }
+
+  $('#trialScheduleType').addEventListener('change', refreshTrialDateMode);
+
+  $('#paymentType').addEventListener('change', refreshPrice);
+  $('#ticketType').addEventListener('change', refreshPrice);
+  $('#customBasePrice').addEventListener('input', refreshPrice);
+
+  $('#trialForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const trials = load(TRIAL_KEY).map(normalizeTrial);
+    const scheduleType = $('#trialScheduleType').value;
+    const trialPayload = {
+      name: $('#trialName').value.trim(),
+      team: $('#trialTeam').value.trim(),
+      age: $('#trialAge').value,
+      position: $('#trialPosition').value.trim(),
+      trainer: $('#trialTrainer').value.trim(),
+      dateTime: scheduleType === 'undecided' ? '미정' : $('#trialDateTime').value,
+      note: $('#trialNote').value.trim()
+    };
+
+    if (editingTrialId) {
+      const updated = trials.map(item => item.id === editingTrialId ? {
+        ...item,
+        ...trialPayload
+      } : item);
+      save(TRIAL_KEY, updated);
+      clearTrialEditMode();
+      renderTrials();
+      switchSub('trial', 'trialList');
+      toast('체험 수업이 수정되었습니다.');
+      return;
+    }
+
+    trials.unshift({
+      id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+      ...trialPayload,
+      status: 'scheduled',
+      statusReason: '',
+      statusChangedAt: '',
+      createdAt: new Date().toISOString()
+    });
+    save(TRIAL_KEY, trials);
+    e.target.reset();
+    refreshTrialDateMode();
+    renderTrials();
+    switchSub('trial', 'trialList');
+    toast('체험 수업이 저장되었습니다.');
+  });
+
+  $('#trialCancelEditBtn').addEventListener('click', () => {
+    clearTrialEditMode();
+    toast('수정이 취소되었습니다.');
+  });
+
+  function openTrialEditConfirm(id) {
+    pendingEditTrialId = id;
+    $('#trialEditConfirmModal').classList.remove('hidden');
+  }
+
+  function closeTrialEditConfirm() {
+    pendingEditTrialId = null;
+    $('#trialEditConfirmModal').classList.add('hidden');
+  }
+
+  function startEditTrial(id) {
+    const item = load(TRIAL_KEY).map(normalizeTrial).find(trial => trial.id === id);
+    if (!item) return;
+    editingTrialId = id;
+    setTrialEditMode(true);
+    $('#trialName').value = item.name || '';
+    $('#trialTeam').value = item.team || '';
+    $('#trialAge').value = item.age || '';
+    $('#trialPosition').value = item.position || '';
+    $('#trialTrainer').value = item.trainer || '';
+    $('#trialNote').value = item.note || '';
+    $('#trialScheduleType').value = item.dateTime === '미정' ? 'undecided' : 'fixed';
+    refreshTrialDateMode();
+    $('#trialDateTime').value = item.dateTime === '미정' ? '' : (item.dateTime || '');
+    switchMain('trial');
+    switchSub('trial', 'trialAdd');
+    setTimeout(() => {
+      $('#trialForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      $('#trialName').focus();
+    }, 60);
+  }
+
+  window.requestEditTrial = function(id) {
+    openTrialEditConfirm(id);
+  };
+
+  $('#trialEditConfirmCancel').addEventListener('click', closeTrialEditConfirm);
+  $('#trialEditConfirmModal').addEventListener('click', (e) => {
+    if (e.target === $('#trialEditConfirmModal')) closeTrialEditConfirm();
+  });
+  $('#trialEditConfirmSave').addEventListener('click', () => {
+    if (!pendingEditTrialId) return;
+    const id = pendingEditTrialId;
+    closeTrialEditConfirm();
+    startEditTrial(id);
+  });
+
+  $('#paymentForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const { type, count, isCustom, base, vat, total } = paymentValues();
+    const depositor = $('#depositorName').value.trim();
+    if (type === '계좌이체' && !depositor) {
+      toast('입금자명을 입력해 주세요.');
+      $('#depositorName').focus();
+      return;
+    }
+    if (isCustom && base <= 0) {
+      toast('기타 기본 금액을 입력해 주세요.');
+      $('#customBasePrice').focus();
+      return;
+    }
+
+    const payload = {
+      type,
+      player: $('#paymentPlayer').value.trim(),
+      affiliation: $('#paymentAffiliation').value.trim(),
+      depositor,
+      ticketCount: count,
+      ticketLabel: isCustom ? '기타' : `${count}회권`,
+      base,
+      vat,
+      total
+    };
+
+    const payments = load(PAYMENT_KEY).map(normalizePayment);
+    if (editingPaymentId) {
+      const updated = payments.map(item => item.id === editingPaymentId ? {
+        ...item,
+        ...payload
+      } : item);
+      save(PAYMENT_KEY, updated);
+      clearPaymentEditMode();
+      renderPayments();
+      switchSub('payment', 'paymentList');
+      toast('결제 내역이 수정되었습니다.');
+      return;
+    }
+
+    payments.unshift({
+      id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+      ...payload,
+      refreshed: false,
+      refreshedBy: '',
+      refreshedAt: '',
+      createdAt: new Date().toISOString()
+    });
+    save(PAYMENT_KEY, payments);
+    e.target.reset();
+    refreshPrice();
+    renderPayments();
+    switchSub('payment', 'paymentList');
+    toast('결제 내역이 저장되었습니다.');
+  });
+
+  $('#paymentCancelEditBtn').addEventListener('click', () => {
+    clearPaymentEditMode();
+    toast('수정이 취소되었습니다.');
+  });
+
+  function openPaymentEditConfirm(id) {
+    pendingEditPaymentId = id;
+    $('#paymentEditConfirmModal').classList.remove('hidden');
+  }
+
+  function closePaymentEditConfirm() {
+    pendingEditPaymentId = null;
+    $('#paymentEditConfirmModal').classList.add('hidden');
+  }
+
+  function startEditPayment(id) {
+    const item = load(PAYMENT_KEY).map(normalizePayment).find(payment => payment.id === id);
+    if (!item) return;
+    editingPaymentId = id;
+    setPaymentEditMode(true);
+    $('#paymentType').value = item.type || '카드';
+    $('#paymentPlayer').value = item.player || '';
+    $('#paymentAffiliation').value = item.affiliation || '';
+    $('#depositorName').value = item.depositor || '';
+    const isCustom = item.ticketCount === 'custom' || item.ticketLabel === '기타';
+    $('#ticketType').value = isCustom ? 'custom' : String(item.ticketCount || 1);
+    $('#customBasePrice').value = isCustom ? (item.base || '') : '';
+    refreshPrice();
+    if (item.type === '계좌이체') $('#depositorName').value = item.depositor || '';
+    switchMain('payment');
+    switchSub('payment', 'paymentAdd');
+    setTimeout(() => {
+      $('#paymentForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      $('#paymentPlayer').focus();
+    }, 60);
+  }
+
+  window.requestEditPayment = function(id) {
+    openPaymentEditConfirm(id);
+  };
+
+  $('#paymentEditConfirmCancel').addEventListener('click', closePaymentEditConfirm);
+  $('#paymentEditConfirmModal').addEventListener('click', (e) => {
+    if (e.target === $('#paymentEditConfirmModal')) closePaymentEditConfirm();
+  });
+  $('#paymentEditConfirmSave').addEventListener('click', () => {
+    if (!pendingEditPaymentId) return;
+    const id = pendingEditPaymentId;
+    closePaymentEditConfirm();
+    startEditPayment(id);
+  });
+
+  function normalizeTrial(item) {
+    return {
+      ...item,
+      status: item.status || 'scheduled',
+      statusReason: item.statusReason || '',
+      statusChangedAt: item.statusChangedAt || ''
+    };
+  }
+
+  function renderTrials() {
+    const allTrials = load(TRIAL_KEY).map(normalizeTrial);
+    const trials = allTrials
+      .filter(item => item.status === activeTrialStatus)
+      .sort((a, b) => new Date(b.statusChangedAt || b.createdAt) - new Date(a.statusChangedAt || a.createdAt));
+    const wrap = $('#trialListWrap');
+    const info = statusInfo[activeTrialStatus];
+    if (!trials.length) {
+      wrap.innerHTML = `<div class="empty">${info.label} 상태의 체험 수업이 없습니다.</div>`;
+      return;
+    }
+    wrap.innerHTML = trials.map(item => {
+      const status = statusInfo[item.status] || statusInfo.scheduled;
+      return `
+      <article class="item-card clickable-card" onclick="requestEditTrial('${item.id}')">
+        <div class="item-head">
+          <div>
+            <div class="item-title">${escapeHtml(item.name)}</div>
+            <div style="font-size:12px;color:var(--sub);margin-top:4px;">등록 ${createdText(item.createdAt)}</div>
+          </div>
+          <span class="badge ${status.badge}">${status.label}</span>
+        </div>
+        <div class="meta">
+          <div class="k">소속</div><div class="v">${escapeHtml(item.team)}</div>
+          <div class="k">나이 / 포지션</div><div class="v">${escapeHtml(item.age)}세 / ${escapeHtml(item.position)}</div>
+          <div class="k">담당 트레이너</div><div class="v">${escapeHtml(item.trainer)}</div>
+          <div class="k">예정일</div><div class="v">${dateText(item.dateTime)}</div>
+          <div class="k">특이사항</div><div class="v">${item.note ? escapeHtml(item.note) : '-'}</div>
+        </div>
+        ${item.statusReason ? `<div class="reason-box"><strong>${status.label} 사유</strong><br>${escapeHtml(item.statusReason)}</div>` : ''}
+        ${item.status === 'scheduled' ? `
+          <div class="item-actions">
+            <button class="action-btn delete" onclick="event.stopPropagation(); deleteTrial('${item.id}')">삭제</button>
+            <button class="action-btn register" onclick="event.stopPropagation(); changeTrialStatus('${item.id}','registered')">등록</button>
+            <button class="action-btn wait" onclick="event.stopPropagation(); changeTrialStatus('${item.id}','waiting')">대기</button>
+            <button class="action-btn fail" onclick="event.stopPropagation(); changeTrialStatus('${item.id}','failed')">실패</button>
+          </div>` : item.status === 'registered' ? `
+          <div class="item-actions" style="grid-template-columns:1fr;">
+            <button class="action-btn delete" onclick="event.stopPropagation(); deleteTrial('${item.id}')">삭제</button>
+          </div>` : `
+          <div class="item-actions" style="grid-template-columns:1fr 1fr;">
+            <button class="action-btn register" onclick="event.stopPropagation(); changeTrialStatus('${item.id}','registered')">등록</button>
+            <button class="action-btn delete" onclick="event.stopPropagation(); deleteTrial('${item.id}')">삭제</button>
+          </div>`}
+      </article>
+    `}).join('');
+  }
+
+  function normalizePayment(item) {
+    return {
+      ...item,
+      refreshed: Boolean(item.refreshed),
+      refreshedBy: item.refreshedBy || '',
+      refreshedAt: item.refreshedAt || '',
+      affiliation: item.affiliation || ''
+    };
+  }
+
+  function renderPayments() {
+    const payments = load(PAYMENT_KEY)
+      .map(normalizePayment)
+      .filter(item => activePaymentStatus === 'refreshed' ? item.refreshed : !item.refreshed)
+      .sort((a, b) => {
+        const aDate = activePaymentStatus === 'refreshed' ? (a.refreshedAt || a.createdAt) : a.createdAt;
+        const bDate = activePaymentStatus === 'refreshed' ? (b.refreshedAt || b.createdAt) : b.createdAt;
+        return new Date(bDate) - new Date(aDate);
+      });
+    const wrap = $('#paymentListWrap');
+    if (!payments.length) {
+      wrap.innerHTML = `<div class="empty">${activePaymentStatus === 'refreshed' ? '최신화된 결제 내역이 없습니다.' : '최신화 대기 중인 결제 내역이 없습니다.'}</div>`;
+      return;
+    }
+    wrap.innerHTML = payments.map(item => `
+      <article class="item-card clickable-card ${item.refreshed ? 'payment-refreshed' : ''}" onclick="requestEditPayment('${item.id}')">
+        <div class="item-head">
+          <div>
+            <div class="item-title">${escapeHtml(item.player)}</div>
+            <div style="font-size:12px;color:var(--sub);margin-top:4px;">결제 ${createdText(item.createdAt)}</div>
+          </div>
+          <span class="badge ${item.refreshed ? 'registered' : ''}">${item.refreshed ? '최신화 완료' : escapeHtml(item.type)}</span>
+        </div>
+        <div class="meta">
+          <div class="k">소속</div><div class="v">${escapeHtml(item.affiliation || '-')}</div>
+          <div class="k">결제 유형</div><div class="v">${escapeHtml(item.type)}</div>
+          <div class="k">이용권</div><div class="v">${escapeHtml(item.ticketLabel || (item.ticketCount === 'custom' ? '기타' : `${item.ticketCount}회권`))}</div>
+          ${item.type === '계좌이체' ? `<div class="k">입금자명</div><div class="v">${escapeHtml(item.depositor)}</div>` : ''}
+          <div class="k">기본 금액</div><div class="v">${money(item.base)}</div>
+          <div class="k">부가세</div><div class="v">${item.vat ? money(item.vat) : '없음'}</div>
+          <div class="k">최종 금액</div><div class="v" style="color:${item.refreshed ? 'var(--success)' : 'var(--blue)'};font-weight:850;">${money(item.total)}</div>
+        </div>
+        ${item.refreshed ? `
+          <div class="refresh-info">
+            최신화 트레이너 : ${escapeHtml(item.refreshedBy)}<br>
+            최신화 일시 : ${createdText(item.refreshedAt)}
+          </div>` : ''}
+        <div class="payment-actions">
+          <button class="payment-action-btn delete" onclick="event.stopPropagation(); deletePayment('${item.id}')">삭제</button>
+          <button class="payment-action-btn refresh" onclick="event.stopPropagation(); openRefreshPayment('${item.id}')">${item.refreshed ? '다시 최신화' : '최신화'}</button>
+        </div>
+      </article>
+    `).join('');
+  }
+
+
+  $$('.payment-status-tab').forEach(btn => btn.addEventListener('click', () => {
+    activePaymentStatus = btn.dataset.paymentStatus;
+    $$('.payment-status-tab').forEach(tab => tab.classList.toggle('active', tab === btn));
+    renderPayments();
+  }));
+
+  $$('.status-tab').forEach(btn => btn.addEventListener('click', () => {
+    activeTrialStatus = btn.dataset.status;
+    $$('.status-tab').forEach(tab => tab.classList.toggle('active', tab === btn));
+    renderTrials();
+  }));
+
+  function persistTrialStatus(id, status, reason = '') {
+    const trials = load(TRIAL_KEY).map(normalizeTrial).map(item => item.id === id ? {
+      ...item,
+      status,
+      statusReason: reason,
+      statusChangedAt: new Date().toISOString()
+    } : item);
+    save(TRIAL_KEY, trials);
+    renderTrials();
+    toast(`${statusInfo[status].label} 상태로 변경되었습니다.`);
+  }
+
+  window.changeTrialStatus = function(id, status) {
+    if (status === 'waiting' || status === 'failed') {
+      pendingReasonChange = { id, status };
+      $('#reasonModalTitle').textContent = `${statusInfo[status].label} 사유 입력`;
+      $('#reasonModalDesc').textContent = `${statusInfo[status].label} 상태로 변경하는 사유를 입력해 주세요.`;
+      $('#reasonInput').value = '';
+      $('#reasonModal').classList.remove('hidden');
+      setTimeout(() => $('#reasonInput').focus(), 50);
+      return;
+    }
+    persistTrialStatus(id, status, '');
+  };
+
+  function closeReasonModal() {
+    $('#reasonModal').classList.add('hidden');
+    pendingReasonChange = null;
+    $('#reasonInput').value = '';
+  }
+
+  $('#reasonCancel').addEventListener('click', closeReasonModal);
+  $('#reasonModal').addEventListener('click', (e) => {
+    if (e.target === $('#reasonModal')) closeReasonModal();
+  });
+  $('#reasonSave').addEventListener('click', () => {
+    if (!pendingReasonChange) return;
+    const reason = $('#reasonInput').value.trim();
+    if (!reason) {
+      toast('사유를 입력해 주세요.');
+      $('#reasonInput').focus();
+      return;
+    }
+    const { id, status } = pendingReasonChange;
+    closeReasonModal();
+    persistTrialStatus(id, status, reason);
+  });
+
+  window.deleteTrial = function(id) {
+    if (!confirm('이 체험 수업을 삭제할까요?')) return;
+    save(TRIAL_KEY, load(TRIAL_KEY).filter(item => item.id !== id));
+    if (editingTrialId === id) clearTrialEditMode();
+    renderTrials();
+    toast('삭제되었습니다.');
+  };
+
+  window.openRefreshPayment = function(id) {
+    pendingRefreshPaymentId = id;
+    $('#refreshTrainerInput').value = '';
+    $('#refreshModal').classList.remove('hidden');
+    setTimeout(() => $('#refreshTrainerInput').focus(), 50);
+  };
+
+  function closeRefreshModal() {
+    $('#refreshModal').classList.add('hidden');
+    pendingRefreshPaymentId = null;
+    $('#refreshTrainerInput').value = '';
+  }
+
+  $('#refreshCancel').addEventListener('click', closeRefreshModal);
+  $('#refreshModal').addEventListener('click', (e) => {
+    if (e.target === $('#refreshModal')) closeRefreshModal();
+  });
+  $('#refreshSave').addEventListener('click', () => {
+    if (!pendingRefreshPaymentId) return;
+    const trainer = $('#refreshTrainerInput').value.trim();
+    if (!trainer) {
+      toast('최신화한 트레이너 이름을 입력해 주세요.');
+      $('#refreshTrainerInput').focus();
+      return;
+    }
+    const id = pendingRefreshPaymentId;
+    const payments = load(PAYMENT_KEY).map(normalizePayment).map(item => item.id === id ? {
+      ...item,
+      refreshed: true,
+      refreshedBy: trainer,
+      refreshedAt: new Date().toISOString()
+    } : item);
+    save(PAYMENT_KEY, payments);
+    closeRefreshModal();
+    activePaymentStatus = 'refreshed';
+    $$('.payment-status-tab').forEach(tab => tab.classList.toggle('active', tab.dataset.paymentStatus === 'refreshed'));
+    renderPayments();
+    toast('최신화 목록으로 이동했습니다.');
+  });
+
+  $('#refreshTrainerInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      $('#refreshSave').click();
+    }
+  });
+
+  window.deletePayment = function(id) {
+    if (!confirm('이 결제 내역을 삭제할까요?')) return;
+    save(PAYMENT_KEY, load(PAYMENT_KEY).filter(item => item.id !== id));
+    if (editingPaymentId === id) clearPaymentEditMode();
+    renderPayments();
+    toast('삭제되었습니다.');
+  };
+
+  refreshTrialDateMode();
+  refreshPrice();
+  renderTrials();
+  renderPayments();
+</script>
+</body>
+</html>
