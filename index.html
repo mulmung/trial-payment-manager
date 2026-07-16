@@ -572,15 +572,15 @@
           </div>
           <div class="field">
             <label for="playerPhone">선수 전화번호</label>
-            <input id="playerPhone" type="tel" inputmode="tel" placeholder="선수 전화번호 입력" />
+            <input id="playerPhone" type="tel" inputmode="numeric" maxlength="13" placeholder="010-0000-0000" />
           </div>
           <div class="field">
             <label for="fatherPhone">아버님 전화번호</label>
-            <input id="fatherPhone" type="tel" inputmode="tel" placeholder="아버님 전화번호 입력" />
+            <input id="fatherPhone" type="tel" inputmode="numeric" maxlength="13" placeholder="010-0000-0000" />
           </div>
           <div class="field">
             <label for="motherPhone">어머님 전화번호</label>
-            <input id="motherPhone" type="tel" inputmode="tel" placeholder="어머님 전화번호 입력" />
+            <input id="motherPhone" type="tel" inputmode="numeric" maxlength="13" placeholder="010-0000-0000" />
           </div>
           <div class="form-actions">
             <button id="trialSubmitBtn" class="primary-btn" type="submit">체험 수업 저장</button>
@@ -937,6 +937,20 @@
       .replaceAll("'", '&#039;');
   }
 
+  function formatPhone(value = '') {
+    const digits = String(value).replace(/\D/g, '').slice(0, 11);
+    if (digits.length <= 3) return digits;
+    if (digits.length <= 7) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+    return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+  }
+
+  function bindPhoneFormatter(selector) {
+    const input = $(selector);
+    input.addEventListener('input', () => {
+      input.value = formatPhone(input.value);
+    });
+  }
+
   function toast(message) {
     const el = $('#toast');
     el.textContent = message;
@@ -1039,9 +1053,9 @@
           <div class="k">예정일</div><div class="v">${dateText(item.dateTime)}</div>
           <div class="k">등록 경로</div><div class="v">${item.route ? escapeHtml(item.route) : '-'}</div>
           <div class="k">특이사항</div><div class="v">${item.note ? escapeHtml(item.note) : '-'}</div>
-          ${item.playerPhone ? `<div class="k">선수 전화번호</div><div class="v">${escapeHtml(item.playerPhone)}</div>` : ''}
-          ${item.fatherPhone ? `<div class="k">아버님 전화번호</div><div class="v">${escapeHtml(item.fatherPhone)}</div>` : ''}
-          ${item.motherPhone ? `<div class="k">어머님 전화번호</div><div class="v">${escapeHtml(item.motherPhone)}</div>` : ''}
+          ${item.playerPhone ? `<div class="k">선수 전화번호</div><div class="v">${escapeHtml(formatPhone(item.playerPhone))}</div>` : ''}
+          ${item.fatherPhone ? `<div class="k">아버님 전화번호</div><div class="v">${escapeHtml(formatPhone(item.fatherPhone))}</div>` : ''}
+          ${item.motherPhone ? `<div class="k">어머님 전화번호</div><div class="v">${escapeHtml(formatPhone(item.motherPhone))}</div>` : ''}
         </div>
         ${item.statusReason ? `<div class="reason-box"><strong>${status.label} 사유</strong><br>${escapeHtml(item.statusReason)}</div>` : ''}
         ${item.status === 'scheduled' ? `<div class="item-actions">
@@ -1083,6 +1097,9 @@
   $('#paymentType').addEventListener('change', refreshPrice);
   $('#ticketType').addEventListener('change', refreshPrice);
   $('#customBasePrice').addEventListener('input', refreshPrice);
+  bindPhoneFormatter('#playerPhone');
+  bindPhoneFormatter('#fatherPhone');
+  bindPhoneFormatter('#motherPhone');
 
   $('#trialForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -1093,9 +1110,9 @@
       dateTime: scheduleType === 'undecided' ? '미정' : $('#trialDateTime').value,
       route: $('#trialRoute').value.trim(),
       note: $('#trialNote').value.trim(),
-      playerPhone: $('#playerPhone').value.trim(),
-      fatherPhone: $('#fatherPhone').value.trim(),
-      motherPhone: $('#motherPhone').value.trim(),
+      playerPhone: formatPhone($('#playerPhone').value),
+      fatherPhone: formatPhone($('#fatherPhone').value),
+      motherPhone: formatPhone($('#motherPhone').value),
       updatedAt: new Date().toISOString()
     };
     try {
@@ -1143,7 +1160,7 @@
   function startEditTrial(id){
     const item=trialsCache.map(normalizeTrial).find(x=>x.id===id); if(!item)return;
     editingTrialId=id; setTrialEditMode(true);
-    $('#trialName').value=item.name||''; $('#trialTeam').value=item.team||''; $('#trialAge').value=item.age||''; $('#trialPosition').value=item.position||''; $('#trialTrainer').value=item.trainer||''; $('#trialRoute').value=item.route||''; $('#trialNote').value=item.note||''; $('#playerPhone').value=item.playerPhone||''; $('#fatherPhone').value=item.fatherPhone||''; $('#motherPhone').value=item.motherPhone||'';
+    $('#trialName').value=item.name||''; $('#trialTeam').value=item.team||''; $('#trialAge').value=item.age||''; $('#trialPosition').value=item.position||''; $('#trialTrainer').value=item.trainer||''; $('#trialRoute').value=item.route||''; $('#trialNote').value=item.note||''; $('#playerPhone').value=formatPhone(item.playerPhone||''); $('#fatherPhone').value=formatPhone(item.fatherPhone||''); $('#motherPhone').value=formatPhone(item.motherPhone||'');
     $('#trialScheduleType').value=item.dateTime==='미정'?'undecided':'fixed'; refreshTrialDateMode(); $('#trialDateTime').value=item.dateTime==='미정'?'':(item.dateTime||'');
     switchMain('trial'); switchSub('trial','trialAdd'); setTimeout(()=>$('#trialForm').scrollIntoView({behavior:'smooth',block:'start'}),60);
   }
