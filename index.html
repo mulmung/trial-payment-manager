@@ -563,6 +563,10 @@
             </div>
           </div>
           <div class="field">
+            <label for="trialRoute">등록 경로</label>
+            <input id="trialRoute" placeholder="예: 지인 소개, 인스타그램, 검색 등" />
+          </div>
+          <div class="field">
             <label for="trialNote">특이사항</label>
             <textarea id="trialNote" placeholder="부상 이력, 요청사항 등"></textarea>
           </div>
@@ -1021,6 +1025,7 @@
           <div class="k">나이 / 포지션</div><div class="v">${escapeHtml(item.age)}세 / ${escapeHtml(item.position)}</div>
           <div class="k">담당 트레이너</div><div class="v">${escapeHtml(item.trainer)}</div>
           <div class="k">예정일</div><div class="v">${dateText(item.dateTime)}</div>
+          <div class="k">등록 경로</div><div class="v">${item.route ? escapeHtml(item.route) : '-'}</div>
           <div class="k">특이사항</div><div class="v">${item.note ? escapeHtml(item.note) : '-'}</div>
         </div>
         ${item.statusReason ? `<div class="reason-box"><strong>${status.label} 사유</strong><br>${escapeHtml(item.statusReason)}</div>` : ''}
@@ -1071,6 +1076,7 @@
       name: $('#trialName').value.trim(), team: $('#trialTeam').value.trim(), age: $('#trialAge').value,
       position: $('#trialPosition').value.trim(), trainer: $('#trialTrainer').value.trim(),
       dateTime: scheduleType === 'undecided' ? '미정' : $('#trialDateTime').value,
+      route: $('#trialRoute').value.trim(),
       note: $('#trialNote').value.trim(), updatedAt: new Date().toISOString()
     };
     try {
@@ -1118,7 +1124,7 @@
   function startEditTrial(id){
     const item=trialsCache.map(normalizeTrial).find(x=>x.id===id); if(!item)return;
     editingTrialId=id; setTrialEditMode(true);
-    $('#trialName').value=item.name||''; $('#trialTeam').value=item.team||''; $('#trialAge').value=item.age||''; $('#trialPosition').value=item.position||''; $('#trialTrainer').value=item.trainer||''; $('#trialNote').value=item.note||'';
+    $('#trialName').value=item.name||''; $('#trialTeam').value=item.team||''; $('#trialAge').value=item.age||''; $('#trialPosition').value=item.position||''; $('#trialTrainer').value=item.trainer||''; $('#trialRoute').value=item.route||''; $('#trialNote').value=item.note||'';
     $('#trialScheduleType').value=item.dateTime==='미정'?'undecided':'fixed'; refreshTrialDateMode(); $('#trialDateTime').value=item.dateTime==='미정'?'':(item.dateTime||'');
     switchMain('trial'); switchSub('trial','trialAdd'); setTimeout(()=>$('#trialForm').scrollIntoView({behavior:'smooth',block:'start'}),60);
   }
